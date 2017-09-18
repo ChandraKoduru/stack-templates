@@ -1,0 +1,247 @@
+{-# START_FILE .gitignore #-}
+/.sources
+/.stack-work
+/target
+
+{-# START_FILE Makefile #-}
+TARGET=target
+EXE=$(TARGET)/{{name}}
+DIST_EXE=$(EXE)-$(shell uname -s)-$(shell uname -m)
+DIST_EXE_SIG=$(DIST_EXE).sig
+
+build:
+	stack build {{name}}
+
+build-prof:
+	stack build --profile --ghc-options="-rtsopts -fprof-auto" {{name}}
+
+install:
+	stack install {{name}}
+
+bindist:
+	mkdir -p $(TARGET)
+	stack --local-bin-path $(TARGET) install {{name}}
+	upx --best $(EXE)
+	mv $(EXE) $(DIST_EXE)
+	gpg --output $(DIST_EXE_SIG) --detach-sign $(DIST_EXE)
+
+clean:
+	stack clean
+	rm -rf target
+
+tags:
+	hasktags-generate .
+
+sources:
+	stack-unpack-dependencies
+
+
+.PHONY: build build-prof clean tags sources
+
+{-# START_FILE package.yaml #-}
+name:                {{name}}
+version:             0.1.0.0
+#synopsis:
+#description:
+homepage:            https://github.com/{{github-username}}{{^github-username}}githubuser{{/github-username}}/{{name}}#readme
+license:             BSD3
+author:              {{author-name}}{{^author-name}}Author name here{{/author-name}}
+maintainer:          {{author-email}}{{^author-email}}example@example.com{{/author-email}}
+copyright:           {{copyright}}{{^copyright}}{{year}}{{^year}}2017{{/year}} {{author-name}}{{^author-name}}Author name here{{/author-name}}{{/copyright}}
+category:            {{category}}{{^category}}Web{{/category}}
+ghc-options: -Wall -Werror -Wno-unused-matches -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+extra-source-files:
+- README.md
+
+dependencies:
+  - base
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Lib
+
+executables:
+  {{name}}:
+    source-dirs:  app
+    main:         Main.hs
+    dependencies: 
+      - {{name}}
+      - optparse-applicative
+      - gitrev
+
+tests:
+    {{name}}-test:
+      source-dirs: test
+      main: Driver.hs
+      dependencies:
+        - {{name}}
+        - hspec
+        - QuickCheck
+        - tasty
+        - tasty-hspec
+        - tasty-hunit
+        - tasty-quickcheck
+        - tasty-discover
+    
+
+{-# START_FILE Setup.hs #-}
+import Distribution.Simple
+main = defaultMain
+
+{-# START_FILE test/Driver.hs #-}
+
+{-# OPTIONS_GHC -Wno-missing-import-lists #-}
+{-# OPTIONS_GHC -F -pgmF tasty-discover #-}
+
+{-# START_FILE test/Test.hs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+module Test where
+
+import Data.List(sort)
+import Test.Tasty(TestTree)
+import Test.Tasty.HUnit ((@?=), Assertion, testCase)
+import Test.Tasty.Hspec (Spec, describe, it, shouldBe)
+import Test.Tasty.QuickCheck(testProperty)
+
+-- HUnit test case
+unit_two_plus_three_equalto_five :: Assertion
+unit_two_plus_three_equalto_five =
+  (2+3) @?= (5 :: Int)
+
+-- Hspec specification
+spec_two_minus_one_equal_to_one :: Spec
+spec_two_minus_one_equal_to_one = do
+  describe "Prelude.head" $ do
+    it "returns the first element of a list" $ do
+      head [23 ..] `shouldBe` (23 :: Int)
+
+-- QuickCheck property
+prop_additionCommutative :: Int -> Int -> Bool
+prop_additionCommutative a b = a + b == b + a
+
+-- Smallcheck property
+scprop_sortReverse :: [Int] -> Bool
+scprop_sortReverse list = sort list == sort (reverse list)
+
+-- Tasty TestTree
+test_multiplication :: [TestTree]
+test_multiplication = [testProperty "One is identity" $ \(a :: Int) -> a * 1 == a]
+
+-- Tasty IO TestTree
+test_generateTree :: IO TestTree
+test_generateTree = do
+  input <- pure "Some input"
+  pure $ testCase input $ pure ()
+
+-- Tasty IO [TestTree]
+test_generateTrees :: IO [TestTree]
+test_generateTrees = do
+  inputs <- pure ["First input", "Second input"]
+  pure $ map (\s -> testCase s $ pure ()) inputs
+
+{-# START_FILE src/Lib.hs #-}
+module Lib where
+
+sayHello :: IO ()
+sayHello = putStrLn "Hello world!"
+
+{-# START_FILE app/Args.hs #-}
+module Args 
+  (getArgs, Args(..))
+where
+
+import Options.Applicative (Parser, long, info, header, help, metavar
+  , progDesc, helper, (<**>), execParser, strOption
+  , fullDesc, (<|>), short, flag', ParserInfo)
+
+import Data.Semigroup ((<>))
+
+data Args = Args 
+  { dirPath :: String
+  , output :: Output 
+  } deriving (Show)
+
+data Output = FileOutput FilePath 
+            | StdOutput 
+            deriving (Show)
+
+options :: Parser Args
+options = Args
+  <$> targetDirectoryParser
+  <*> outputParser
+
+targetDirectoryParser :: Parser String
+targetDirectoryParser = strOption 
+  ( long "directory" 
+  <> metavar "DIRECTORY"
+  <> help "Directory path " )
+
+outputParser :: Parser Output
+outputParser = fileOutput <|> stdOutput
+
+fileOutput :: Parser Output
+fileOutput = FileOutput <$> strOption
+  ( long "file"
+  <> short 'f'
+  <> metavar "FILENAME"
+  <> help "Output file")
+
+stdOutput :: Parser Output
+stdOutput = flag' StdOutput
+  ( long "stdout" 
+  <> help "Write to stdout")
+
+args :: ParserInfo Args
+args = info (options <**> helper)
+  ( fullDesc
+    <> progDesc "Program description"
+    <> header "Program header")
+
+getArgs :: IO Args
+getArgs = execParser args
+
+{-# START_FILE app/Main.hs #-}
+module Main where
+
+import Args (getArgs)
+
+main :: IO ()
+main = do
+  args <- getArgs
+  putStrLn $ show args
+
+{-# START_FILE README.md #-}
+# {{name}}
+
+{-# START_FILE LICENSE #-}
+Copyright {{author-name}}{{^author-name}}Author name here{{/author-name}} (c) {{year}}{{^year}}2016{{/year}}
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * Neither the name of {{author-name}}{{^author-name}}Author name here{{/author-name}} nor the names of other
+      contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
