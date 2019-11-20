@@ -2,6 +2,8 @@
 /.sources
 /.stack-work
 /target
+stack.yaml.lock
+{{name}}.cabal
 
 {-# START_FILE Makefile #-}
 TARGET=target
@@ -48,7 +50,7 @@ license:             BSD3
 author:              {{author-name}}{{^author-name}}Author name here{{/author-name}}
 maintainer:          {{author-email}}{{^author-email}}example@example.com{{/author-email}}
 copyright:           {{copyright}}{{^copyright}}{{year}}{{^year}}2017{{/year}} {{author-name}}{{^author-name}}Author name here{{/author-name}}{{/copyright}}
-category:            {{category}}{{^category}}Web{{/category}}
+category:            {{category}}{{^category}}CLI{{/category}}
 ghc-options: -Wall -Werror -Wno-unused-matches -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
 extra-source-files:
 - README.md
@@ -60,6 +62,9 @@ library:
   source-dirs: src
   exposed-modules:
     - Lib
+  dependencies:
+    - rio
+    - rio-prettyprint
 
 executables:
   {{name}}:
@@ -68,6 +73,7 @@ executables:
     dependencies: 
       - {{name}}
       - optparse-applicative
+      - rio
     ghc-options: -main-is Main
 
 tests:
@@ -141,70 +147,114 @@ test_generateTrees = do
   pure $ map (\s -> testCase s $ pure ()) inputs
 
 {-# START_FILE src/Lib.hs #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wall #-}
+
 module Lib where
+
+import RIO (IO)
+import Prelude (putStrLn)
 
 sayHello :: IO ()
 sayHello = putStrLn "Hello world!"
 
 {-# START_FILE app/Args.hs #-}
-module Args 
-  (getArgs, Args(..))
+module Args
+  ( getArgs,
+    Args (..),
+  )
 where
 
-import Options.Applicative (Parser, long, info, header, help, metavar
-  , progDesc, helper, (<**>), execParser, strOption
-  , fullDesc, (<|>), short, flag', ParserInfo)
-
 import Data.Semigroup ((<>))
+import Options.Applicative
+  ( (<**>),
+    (<|>),
+    Parser,
+    ParserInfo,
+    execParser,
+    flag',
+    fullDesc,
+    header,
+    help,
+    helper,
+    info,
+    long,
+    metavar,
+    progDesc,
+    short,
+    strOption,
+  )
 
-data Args = Args 
-  { dirPath :: String
-  , output :: Output 
-  } deriving (Show)
+data Args
+  = Args
+      { dirPath :: String,
+        output :: Output
+      }
+  deriving (Show)
 
-data Output = FileOutput FilePath 
-            | StdOutput 
-            deriving (Show)
+data Output
+  = FileOutput FilePath
+  | StdOutput
+  deriving (Show)
 
 options :: Parser Args
-options = Args
-  <$> targetDirectoryParser
-  <*> outputParser
+options =
+  Args
+    <$> targetDirectoryParser
+    <*> outputParser
 
 targetDirectoryParser :: Parser String
-targetDirectoryParser = strOption 
-  ( long "directory" 
-  <> metavar "DIRECTORY"
-  <> help "Directory path " )
+targetDirectoryParser =
+  strOption
+    ( long "directory"
+        <> metavar "DIRECTORY"
+        <> help "Directory path "
+    )
 
 outputParser :: Parser Output
 outputParser = fileOutput <|> stdOutput
 
 fileOutput :: Parser Output
-fileOutput = FileOutput <$> strOption
-  ( long "file"
-  <> short 'f'
-  <> metavar "FILENAME"
-  <> help "Output file")
+fileOutput =
+  FileOutput
+    <$> strOption
+      ( long "file"
+          <> short 'f'
+          <> metavar "FILENAME"
+          <> help "Output file"
+      )
 
 stdOutput :: Parser Output
-stdOutput = flag' StdOutput
-  ( long "stdout" 
-  <> help "Write to stdout")
+stdOutput =
+  flag'
+    StdOutput
+    ( long "stdout"
+        <> help "Write to stdout"
+    )
 
 args :: ParserInfo Args
-args = info (options <**> helper)
-  ( fullDesc
-    <> progDesc "Program description"
-    <> header "Program header")
+args =
+  info
+    (options <**> helper)
+    ( fullDesc
+        <> progDesc "Program description"
+        <> header "Program header"
+    )
 
 getArgs :: IO Args
 getArgs = execParser args
 
 {-# START_FILE app/Main.hs #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wall #-}
+
 module Main where
 
 import Args (getArgs)
+import RIO (($), IO, show)
+import Prelude (putStrLn)
 
 main :: IO ()
 main = do
@@ -231,7 +281,7 @@ main = do
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: lts-9.5
+resolver: lts-14.15
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -256,8 +306,9 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
-  - tasty-discover-4.0.0
-  - optparse-applicative-0.14.0.0
+#  - tasty-discover-4.0.0
+#  - optparse-applicative-0.14.0.0
+   - pretty-terminal-0.1.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}
